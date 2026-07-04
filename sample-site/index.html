@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="fa" dir="rtl">
+<head>
+<meta charset="UTF-8" />
+<title>لیست مشتریان</title>
+<style>
+  body { font-family: Tahoma, sans-serif; max-width: 600px; margin: 40px auto; background: #1e1e1e; color: #eee; }
+  h1 { text-align: center; }
+  form { display: flex; gap: 8px; margin-bottom: 20px; }
+  input { flex: 1; padding: 8px; border-radius: 4px; border: 1px solid #444; background: #2a2a2a; color: #eee; }
+  button { padding: 8px 16px; border: none; border-radius: 4px; background: #3b82f6; color: white; cursor: pointer; }
+  ul { list-style: none; padding: 0; }
+  li { display: flex; justify-content: space-between; padding: 10px; background: #2a2a2a; margin-bottom: 6px; border-radius: 4px; }
+  span.del { color: #f87171; cursor: pointer; }
+</style>
+</head>
+<body>
+  <h1>لیست مشتریان</h1>
+  <form id="f">
+    <input id="name" placeholder="نام مشتری" required />
+    <input id="phone" placeholder="شماره تماس" required />
+    <button type="submit">افزودن</button>
+  </form>
+  <ul id="list"></ul>
+
+<script>
+async function init() {
+  await window.db.run(`CREATE TABLE IF NOT EXISTS customers (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT NOT NULL,
+    phone TEXT NOT NULL
+  )`);
+  await refresh();
+}
+
+async function refresh() {
+  const rows = await window.db.query('SELECT * FROM customers ORDER BY id DESC');
+  const list = document.getElementById('list');
+  list.innerHTML = '';
+  for (const row of rows) {
+    const li = document.createElement('li');
+    li.innerHTML = `<span>${row.name} — ${row.phone}</span><span class="del" data-id="${row.id}">حذف</span>`;
+    list.appendChild(li);
+  }
+  list.querySelectorAll('.del').forEach((el) => {
+    el.addEventListener('click', async () => {
+      await window.db.run('DELETE FROM customers WHERE id = ?', [Number(el.dataset.id)]);
+      refresh();
+    });
+  });
+}
+
+document.getElementById('f').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const name = document.getElementById('name').value;
+  const phone = document.getElementById('phone').value;
+  await window.db.run('INSERT INTO customers (name, phone) VALUES (?, ?)', [name, phone]);
+  document.getElementById('f').reset();
+  refresh();
+});
+
+init();
+</script>
+</body>
+</html>
