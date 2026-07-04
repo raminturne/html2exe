@@ -4,6 +4,10 @@ Turn any HTML/CSS/JS site into a standalone Windows `.exe` — no coding, no bac
 
 ![HTML2EXE screenshot](docs/screenshot.png)
 
+## Download
+
+Grab the latest portable `HTML2EXE.exe` from the [Releases page](https://github.com/raminturne/html2exe/releases/latest) — no Node.js or any other install required, just download and run it.
+
 ## What it does
 
 - Takes any HTML/CSS/JS folder (a single page or a full site) and packages it into a portable Windows desktop app.
@@ -14,7 +18,11 @@ Turn any HTML/CSS/JS site into a standalone Windows `.exe` — no coding, no bac
 
 ## Usage
 
-### GUI
+### Prebuilt (recommended)
+
+Download `HTML2EXE.exe` from [Releases](https://github.com/raminturne/html2exe/releases/latest) and run it directly — it's fully self-contained.
+
+### Running from source
 
 ```
 npm install
@@ -45,7 +53,7 @@ Every generated app is an Electron app built from `template/`: it loads the site
 ## Requirements
 
 - Windows
-- Node.js
+- Node.js — only if running from source; the prebuilt `HTML2EXE.exe` needs nothing else installed
 
 ---
 

@@ -2,6 +2,16 @@
 // Convert an HTML/CSS/JS folder into a standalone Windows .exe (portable, no prerequisites).
 // Usage: node build.js --input <siteFolder> [--name "App Name"] [--icon icon.ico] [--output ./output]
 
+// When this script is run via Electron's bundled Node (ELECTRON_RUN_AS_NODE,
+// used by the packaged app so end users don't need Node.js installed),
+// Electron's fs patches otherwise intercept any path containing ".asar" as a
+// virtual archive — which breaks electron-builder writing a real, brand new
+// app.asar file to disk. This disables that interception; it's a no-op under
+// plain Node.
+if (process.versions.electron) {
+  process.noAsar = true;
+}
+
 const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
@@ -23,6 +33,31 @@ function sanitizeName(name) {
   return name.replace(/[^\w\- ؀-ۿ]/g, '').trim() || 'App';
 }
 
+// fs.cpSync's built-in recursive copy is unreliable here when this script
+// runs under Electron's bundled Node (ELECTRON_RUN_AS_NODE) — it intermittently
+// throws ENOTDIR partway through large trees like a bundled node_modules. A
+// plain hand-rolled walk avoids whatever edge case that hits.
+function copyDirSync(src, dest) {
+  fs.mkdirSync(dest, { recursive: true });
+  for (const entry of fs.readdirSync(src, { withFileTypes: true })) {
+    const srcPath = path.join(src, entry.name);
+    const destPath = path.join(dest, entry.name);
+    if (entry.isDirectory()) {
+      copyDirSync(srcPath, destPath);
+    } else if (entry.isFile()) {
+      try {
+        fs.copyFileSync(srcPath, destPath);
+      } catch (err) {
+        // Electron's own runtime specially intercepts a couple of internal
+        // filenames (e.g. default_app.asar) when this script runs under its
+        // bundled Node — those aren't needed by the generated app, so skip
+        // rather than fail the whole build over them.
+        console.warn(`Skipped unreadable file: ${srcPath} (${err.code || err.message})`);
+      }
+    }
+  }
+}
+
 // Each generated app needs its own isolated userData folder (Electron uses
 // package.json's "name" for that path), so this must be unique per app and
 // npm-safe (ascii, lowercase). It's derived from appName so rebuilding the
@@ -36,7 +71,7 @@ function packageIdFor(appName) {
   return `${slug || 'app'}-${hash}`;
 }
 
-function main() {
+async function main() {
   const args = parseArgs(process.argv.slice(2));
   if (!args.input) {
     console.error('Usage: node build.js --input <siteFolder> [--name "App Name"] [--icon icon.ico] [--output ./output]');
@@ -63,12 +98,12 @@ function main() {
   fs.mkdirSync(buildDir, { recursive: true });
 
   // Copy template (including node_modules) into the temp build dir.
-  fs.cpSync(templateDir, buildDir, { recursive: true });
+  copyDirSync(templateDir, buildDir);
 
   // Replace the placeholder app/ folder with the user's site.
   const appDir = path.join(buildDir, 'app');
   fs.rmSync(appDir, { recursive: true, force: true });
-  fs.cpSync(inputDir, appDir, { recursive: true });
+  copyDirSync(inputDir, appDir);
 
   // Patch package.json with the app name and optional icon.
   const pkgPath = path.join(buildDir, 'package.json');
@@ -96,11 +131,22 @@ function main() {
   fs.writeFileSync(pkgPath, JSON.stringify(pkg, null, 2));
 
   console.log('Building portable .exe (this can take a minute)...');
-  execSync('npx electron-builder build --win portable', { cwd: buildDir, stdio: 'inherit' });
+  // Invoked programmatically (not via `npx electron-builder`) so this works
+  // even on end-user machines that have no Node.js/npm installed at all —
+  // see main.js, which runs this script itself via Electron's own bundled
+  // Node when packaged.
+  const builder = require(path.join(buildDir, 'node_modules', 'electron-builder'));
+  await builder.build({
+    targets: builder.Platform.WINDOWS.createTarget(['portable'], builder.Arch.x64),
+    projectDir: buildDir,
+  });
 
   fs.rmSync(buildDir, { recursive: true, force: true });
 
   console.log(`\nDone. Your app is here: ${path.join(outputDir, appName + '.exe')}`);
 }
 
-main();
+main().catch((err) => {
+  console.error(err && err.stack || err);
+  process.exit(1);
+});

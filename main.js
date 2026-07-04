@@ -6,6 +6,23 @@ const { spawn } = require('child_process');
 let mainWindow;
 let activeChild = null;
 
+// In dev, build.js/template/ sit next to this file and run under the system
+// Node. In a packaged app there is no guarantee the end user has Node.js
+// installed at all, so build.js is bundled as an extra resource and run
+// through Electron's own bundled Node instead (ELECTRON_RUN_AS_NODE=1 makes
+// this very executable behave like a plain `node` binary).
+function getBuildJsPath() {
+  return app.isPackaged
+    ? path.join(process.resourcesPath, 'build.js')
+    : path.join(__dirname, 'build.js');
+}
+
+function getDefaultOutputDir() {
+  return app.isPackaged
+    ? path.join(app.getPath('documents'), 'HTML2EXE Output')
+    : path.join(__dirname, 'output');
+}
+
 function createWindow() {
   mainWindow = new BrowserWindow({
     width: 1040,
@@ -52,13 +69,13 @@ ipcMain.handle('dialog:pick-icon', async () => {
 ipcMain.handle('dialog:pick-output-folder', async () => {
   const result = await dialog.showOpenDialog(mainWindow, {
     properties: ['openDirectory'],
-    defaultPath: path.join(__dirname, 'output'),
+    defaultPath: getDefaultOutputDir(),
   });
   if (result.canceled || result.filePaths.length === 0) return null;
   return result.filePaths[0];
 });
 
-ipcMain.handle('app:get-default-output', () => path.join(__dirname, 'output'));
+ipcMain.handle('app:get-default-output', () => getDefaultOutputDir());
 
 ipcMain.handle('build:start', (_event, params) => {
   if (activeChild) {
@@ -70,12 +87,20 @@ ipcMain.handle('build:start', (_event, params) => {
     return { ok: false, error: 'Please choose a valid input folder.' };
   }
 
-  const args = [path.join(__dirname, 'build.js'), '--input', input];
+  const buildJsPath = getBuildJsPath();
+  const args = [buildJsPath, '--input', input];
   if (name) args.push('--name', name);
   if (icon) args.push('--icon', icon);
   if (output) args.push('--output', output);
 
-  const child = spawn('node', args, { cwd: __dirname });
+  const spawnOptions = { cwd: path.dirname(buildJsPath) };
+  let command = 'node';
+  if (app.isPackaged) {
+    command = process.execPath;
+    spawnOptions.env = { ...process.env, ELECTRON_RUN_AS_NODE: '1' };
+  }
+
+  const child = spawn(command, args, spawnOptions);
   activeChild = child;
 
   const forward = (data) => {

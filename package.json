@@ -6,9 +6,37 @@
   "main": "main.js",
   "scripts": {
     "dev": "electron .",
-    "start": "electron ."
+    "start": "electron .",
+    "dist": "electron-builder build --win portable"
   },
   "devDependencies": {
-    "electron": "^31.0.0"
+    "electron": "^31.0.0",
+    "electron-builder": "^25.0.0"
+  },
+  "build": {
+    "appId": "com.raminturne.html2exe",
+    "productName": "HTML2EXE",
+    "asar": true,
+    "files": [
+      "main.js",
+      "preload.js",
+      "renderer/**/*"
+    ],
+    "extraResources": [
+      { "from": "build.js", "to": "build.js" },
+      { "from": "template", "to": "template" }
+    ],
+    "win": {
+      "icon": "build/icon.ico",
+      "target": [
+        { "target": "portable", "arch": ["x64"] }
+      ]
+    },
+    "portable": {
+      "artifactName": "HTML2EXE.exe"
+    },
+    "directories": {
+      "output": "release"
+    }
   }
 }
